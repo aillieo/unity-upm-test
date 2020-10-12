@@ -12,7 +12,7 @@ git subtree split --prefix=Assets/UnityUpmTest --branch upm
 git tag 1.0.0 upm
 ```
 
-####3. Push to remote:
+#### 3. Push to remote:
 
 ```
 git push origin upm --tags
