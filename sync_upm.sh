@@ -11,10 +11,7 @@ DOCUMENTATION_DIR="Documentation"
 FILES_TO_MOVE=(
     "LICENSE.md"
     "README.md"
-)
-FILES_TO_RESTORE=(
-    "LICENSE.md.meta"
-    "README.md.meta"
+    "Screenshots"
 )
 
 # Define variables
@@ -85,12 +82,12 @@ move_files() {
     print_log "Moving files"
 
     # Files added in the upm branch
-    for file in "${FILES_TO_MOVE[@]}"; do
-        if git show "$MASTER_BRANCH":"$file" &> /dev/null; then
-            git checkout "$MASTER_BRANCH" -- "$file"
-            git add "$file"
+    for path in "${FILES_TO_MOVE[@]}"; do
+        if git show "$MASTER_BRANCH":"$path" &> /dev/null; then
+            git checkout "$MASTER_BRANCH" -- "$path"
+            git add "$path"
         else
-            echo "$file is not found in $MASTER_BRANCH"
+            echo "$path is not found in $MASTER_BRANCH"
         fi
     done
 
@@ -101,32 +98,11 @@ move_files() {
     git mv "$DOCUMENTATION_DIR" Documentation~ &> /dev/null || echo "$DOCUMENTATION_DIR is not found"
 
     # Newly added files in the upm branch need to generate meta files
-    if [ "$create_upm_temp" -eq 1 ]; then
-        # If there is an old upm branch, use the old meta files to avoid changing GUIDs.
-        for file in "${FILES_TO_RESTORE[@]}"; do
-            if git show "$UPM_BRANCH":"$file" &> /dev/null; then
-                git checkout "$UPM_BRANCH" -- "$file"
-                git add "$file"
-            else
-                if [[ "$file" == *.meta ]]; then
-                    echo "$file is not found in $UPM_BRANCH. Will create a new file."
-                    file_name="${file%.meta}"
-                    generate_meta_file "$file_name" 0
-                    git add "$file"
-                else
-                    echo "$file is not found in $UPM_BRANCH."
-                fi
-            fi
-        done
-    else
-        for file in "${FILES_TO_RESTORE[@]}"; do
-            if [[ "$file" == *.meta ]]; then
-                file_name="${file%.meta}"
-                generate_meta_file "$file_name" 0
-                git add "$file"
-            fi
-        done
-    fi
+
+    # If there is an old upm branch, use the old meta files to avoid changing GUIDs.
+    for path in "${FILES_TO_MOVE[@]}"; do
+        restore_meta_for_path "$path"
+    done
 }
 
 # Generate GUID
@@ -142,6 +118,42 @@ generate_guid() {
 
     guid=$(echo "$guid" | tr -d - | tr '[:upper:]' '[:lower:]')
     echo "$guid"
+}
+
+restore_meta_for_path() {
+    local path=$1
+    path_meta="${path%.meta}"
+
+    if [ -f "$path" ]; then
+        # Path is a file
+        if git show "$UPM_BRANCH":"$path_meta" &> /dev/null; then
+            git checkout "$UPM_BRANCH" -- "$path_meta"
+            git add "$path_meta"
+        else
+            # echo "$path_meta is not found in $UPM_BRANCH. Will create a new file."
+            generate_meta_file "$path_meta" 0
+            git add "$path_meta"
+        fi
+    elif [ -d "$path" ]; then
+        # Path is a directory
+        # echo "Generating meta file for the directory: $path"
+        if git show "$UPM_BRANCH":"$path_meta" &> /dev/null; then
+            git checkout "$UPM_BRANCH" -- "$path_meta"
+            git add "$path_meta"
+        else
+            # echo "$path_meta is not found in $UPM_BRANCH. Will create a new file."
+            file_name="${path%.meta}"
+            generate_meta_file "$path_meta" 1
+            git add "$path_meta"
+        fi
+
+        # echo "Generating meta files for files inside the directory: $path"
+        for inner_path in "$path"/*; do
+            restore_meta_for_path "$inner_path"
+        done
+    else
+        echo "$path does not exist."
+    fi
 }
 
 # Generate .meta file similar to Unity
